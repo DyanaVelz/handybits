@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>File Grabber &amp; Renamer</title>
+<title>WEBP to JPG Converter</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
@@ -14,14 +14,14 @@
 <body>
 <div class="wrap">
   <div class="nav"><a href="index.html">File Renamer</a><a href="WEBPconverter.html">WEBP ► JPG</a></div>
-  <div class="sun"></div>
-  <h1>❤︎ File Grabber &amp; Renamer ❤︎</h1>
-  <p class="sub">if you upload a spreadsheet with a filename column and a downloadlink column, this loveliness fetches each file, renames it, and packages everything into one zip to download <br>❤︎</p>
+  <div class="sun alt"></div>
+  <h1>❤︎ WEBP ► JPG Converter ❤︎</h1>
+  <p class="sub">if you upload a spreadsheet with a part number column and an WEBP link column, this coolness fetches each file, converts it to JPG, and packages everything into one zip to download<br>(images plus a CSV mapping part numbers to filenames) <br>❤︎</p>
 
   <div class="card">
     <h2>1. Upload spreadsheet</h2>
     <div class="dropzone" id="dropzone">
-      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
       <div id="dropzoneText">Click to choose a file, or drag one here<br><span style="font-size:12px">.xlsx, .xls, or .csv</span></div>
     </div>
     <div class="file-preview" id="filePreview"></div>
@@ -31,11 +31,11 @@
     <h2>2. Match your columns</h2>
     <div class="row">
       <div>
-        <label for="nameCol">Column with the desired filename</label>
-        <select id="nameCol"></select>
+        <label for="partCol">Column with the part number</label>
+        <select id="partCol"></select>
       </div>
       <div>
-        <label for="urlCol">Column with the download link</label>
+        <label for="urlCol">Column with the image link</label>
         <select id="urlCol"></select>
       </div>
     </div>
@@ -52,7 +52,7 @@
   <div class="card hidden" id="runCard">
     <h2>4. Generate</h2>
     <div class="actions">
-      <button id="runBtn">Generate downloads</button>
+      <button id="runBtn">Convert &amp; zip</button>
       <button class="secondary hidden" id="downloadBtn">Voilá! Download zip</button>
     </div>
     <div class="progress-outer" id="progressOuter">
@@ -76,7 +76,7 @@ const columnCard = document.getElementById('columnCard');
 const proxyCard = document.getElementById('proxyCard');
 const proxyUrlInput = document.getElementById('proxyUrl');
 const runCard = document.getElementById('runCard');
-const nameCol = document.getElementById('nameCol');
+const partCol = document.getElementById('partCol');
 const urlCol = document.getElementById('urlCol');
 const rowCount = document.getElementById('rowCount');
 const runBtn = document.getElementById('runBtn');
@@ -114,15 +114,15 @@ function handleFile(file) {
     headers = Object.keys(json[0]);
     filePreview.innerHTML = `Loaded <b>${file.name}</b> — ${rows.length} row(s), ${headers.length} column(s).`;
 
-    nameCol.innerHTML = headers.map(h => `<option value="${escapeAttr(h)}">${escapeHtml(h)}</option>`).join('');
+    partCol.innerHTML = headers.map(h => `<option value="${escapeAttr(h)}">${escapeHtml(h)}</option>`).join('');
     urlCol.innerHTML = headers.map(h => `<option value="${escapeAttr(h)}">${escapeHtml(h)}</option>`).join('');
 
-    const guessName = headers.find(h => /file\s*name|name/i.test(h));
-    const guessUrl = headers.find(h => /link|url|download/i.test(h));
-    if (guessName) nameCol.value = guessName;
+    const guessPart = headers.find(h => /part\s*(number|no|#)?|sku/i.test(h));
+    const guessUrl = headers.find(h => /link|url|image|download/i.test(h));
+    if (guessPart) partCol.value = guessPart;
     if (guessUrl) urlCol.value = guessUrl;
 
-    rowCount.innerHTML = `<b>${rows.length}</b> file(s) will be processed.`;
+    rowCount.innerHTML = `<b>${rows.length}</b> image(s) will be processed.`;
     columnCard.classList.remove('hidden');
     proxyCard.classList.remove('hidden');
     runCard.classList.remove('hidden');
@@ -143,7 +143,7 @@ function resetRunState(){
   log.classList.remove('show');
   finalSummary.classList.add('hidden');
   runBtn.disabled = false;
-  runBtn.textContent = 'Generate downloads';
+  runBtn.textContent = 'Convert & zip';
 }
 
 function addLog(msg, type='info'){
@@ -154,23 +154,40 @@ function addLog(msg, type='info'){
   log.scrollTop = log.scrollHeight;
 }
 
-function guessExtension(url, fallbackName){
-  try {
-    const u = new URL(url, window.location.href);
-    const path = u.pathname;
-    const match = path.match(/\.([a-zA-Z0-9]{1,6})$/);
-    if (match) return match[1];
-  } catch(e) {}
-  const nameMatch = String(fallbackName).match(/\.([a-zA-Z0-9]{1,6})$/);
-  if (nameMatch) return null;
-  return null;
+// Convert any image blob to a JPG blob via canvas.
+// Works for WEBP (and PNG/GIF too) since the browser's <img> decoder handles all of them.
+function convertToJpg(blob){
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      // JPG has no transparency, so paint a white background first
+      // in case the source WEBP had an alpha channel.
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob((jpgBlob) => {
+        URL.revokeObjectURL(objectUrl);
+        if (jpgBlob) resolve(jpgBlob);
+        else reject(new Error('Canvas could not export JPG'));
+      }, 'image/jpeg', 0.92);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Browser could not decode this image'));
+    };
+    img.src = objectUrl;
+  });
 }
 
-function ensureExtension(desiredName, url){
-  const hasExt = /\.[a-zA-Z0-9]{1,6}$/.test(desiredName);
-  if (hasExt) return desiredName;
-  const ext = guessExtension(url, desiredName);
-  return ext ? `${desiredName}.${ext}` : desiredName;
+function csvEscape(value){
+  const s = String(value ?? '');
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
 }
 
 async function runJob(){
@@ -183,26 +200,27 @@ async function runJob(){
   downloadBtn.classList.add('hidden');
   zipBlob = null;
 
-  const nCol = nameCol.value;
+  const pCol = partCol.value;
   const uCol = urlCol.value;
   const zip = new JSZip();
   const usedNames = new Set();
+  const mappingRows = [['PartNumber', 'FileName']];
   let ok = 0, fail = 0;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rawName = String(row[nCol] ?? '').trim();
+    const partNumber = String(row[pCol] ?? '').trim();
     const url = String(row[uCol] ?? '').trim();
-    progressLabel.textContent = `Fetching ${i+1} of ${rows.length}: ${rawName || '(no name)'}`;
-    progressInner.style.width = `${Math.round(((i) / rows.length) * 100)}%`;
+    progressLabel.textContent = `Fetching ${i+1} of ${rows.length}: ${partNumber || '(no part number)'}`;
+    progressInner.style.width = `${Math.round((i / rows.length) * 100)}%`;
 
     if (!url) {
       addLog(`✗ Row ${i+1}: no URL, skipped.`, 'err');
       fail++;
       continue;
     }
-    if (!rawName) {
-      addLog(`✗ Row ${i+1}: no filename, skipped.`, 'err');
+    if (!partNumber) {
+      addLog(`✗ Row ${i+1}: no part number, skipped.`, 'err');
       fail++;
       continue;
     }
@@ -212,26 +230,25 @@ async function runJob(){
       const fetchUrl = proxy ? `${proxy.replace(/\/$/, '')}/?url=${encodeURIComponent(url)}` : url;
       const res = await fetch(fetchUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+      const sourceBlob = await res.blob();
+      const jpgBlob = await convertToJpg(sourceBlob);
 
-      let finalName = ensureExtension(rawName, url);
+      let finalName = `${partNumber}.jpg`;
       let dedupedName = finalName;
       let counter = 2;
       while (usedNames.has(dedupedName)) {
-        const dot = finalName.lastIndexOf('.');
-        dedupedName = dot > -1
-          ? `${finalName.slice(0, dot)} (${counter})${finalName.slice(dot)}`
-          : `${finalName} (${counter})`;
+        dedupedName = `${partNumber} (${counter}).jpg`;
         counter++;
       }
       usedNames.add(dedupedName);
 
-      zip.file(dedupedName, blob);
+      zip.file(dedupedName, jpgBlob);
+      mappingRows.push([partNumber, dedupedName]);
       addLog(`✓ ${dedupedName}`, 'ok');
       ok++;
     } catch (err) {
       const isCors = err instanceof TypeError;
-      addLog(`✗ Row ${i+1} (${rawName}): ${isCors ? 'blocked (likely CORS or network issue)' : err.message}`, 'err');
+      addLog(`✗ Row ${i+1} (${partNumber}): ${isCors ? 'blocked (likely CORS or network issue)' : err.message}`, 'err');
       fail++;
     }
   }
@@ -240,13 +257,16 @@ async function runJob(){
   progressLabel.textContent = 'Building zip…';
 
   if (ok > 0) {
+    const csvContent = mappingRows.map(r => r.map(csvEscape).join(',')).join('\n');
+    zip.file('part-numbers.csv', csvContent);
     zipBlob = await zip.generateAsync({ type: 'blob' });
     downloadBtn.classList.remove('hidden');
   }
 
   progressLabel.textContent = 'Done';
   finalSummary.classList.remove('hidden');
-  finalSummary.innerHTML = `<b>${ok}</b> succeeded, <b>${fail}</b> failed out of ${rows.length}.` +
+  finalSummary.innerHTML = `<b>${ok}</b> succeeded, <b>${fail}</b> failed out of ${rows.length}. ` +
+    (ok > 0 ? 'The zip includes a <b>part-numbers.csv</b> mapping file alongside the images.' : '') +
     (fail > 0 ? ' See the log above for details on failures.' : '');
 
   runBtn.disabled = false;
@@ -260,7 +280,7 @@ downloadBtn.addEventListener('click', () => {
   const a = document.createElement('a');
   const url = URL.createObjectURL(zipBlob);
   a.href = url;
-  a.download = 'renamed-files.zip';
+  a.download = 'converted-jpgs.zip';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
