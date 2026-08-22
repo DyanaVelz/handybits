@@ -3,269 +3,39 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>File Grabber &amp; Renamer</title>
+<title>handybits</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 <div class="wrap">
-  <div class="nav"><a href="index.html">File Renamer</a><a href="WEBPconverter.html">WEBP ► JPG</a></div>
-  <div class="sun"></div>
-  <h1>❤︎ File Grabber &amp; Renamer ❤︎</h1>
-  <p class="sub">if you upload a spreadsheet with a filename column and a downloadlink column, this loveliness fetches each file, renames it, and packages everything into one zip to download <br>❤︎</p>
-
-  <div class="card">
-    <h2>1. Upload spreadsheet</h2>
-    <div class="dropzone" id="dropzone">
-      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
-      <div id="dropzoneText">Click to choose a file, or drag one here<br><span style="font-size:12px">.xlsx, .xls, or .csv</span></div>
-    </div>
-    <div class="file-preview" id="filePreview"></div>
+  <div class="nav">
+    <a href="index.html">Home</a><a href="00Renamer.html">File Renamer</a><a href="01converter.html">WEBP ► JPG</a><a href="02counter.html">Word Counter</a>
   </div>
 
-  <div class="card hidden" id="columnCard">
-    <h2>2. Match your columns</h2>
-    <div class="row">
-      <div>
-        <label for="nameCol">Column with the desired filename</label>
-        <select id="nameCol"></select>
-      </div>
-      <div>
-        <label for="urlCol">Column with the download link</label>
-        <select id="urlCol"></select>
-      </div>
-    </div>
-    <div class="summary" id="rowCount"></div>
+  <div class="hero">
+    <div class="moon"></div>
   </div>
 
-  <div class="card hidden" id="proxyCard">
-    <h2>3. CORS proxy</h2>
-    <label for="proxyUrl">Proxy URL</label>
-    <input type="text" id="proxyUrl" value="https://corsproxy.dyana-veralopez.workers.dev" placeholder="https://your-worker-name.your-subdomain.workers.dev">
-    <div class="summary" style="margin-top:8px;">★swap in a different one if you prefer</div>
-  </div>
+  <h1>❤︎ handybits ❤︎</h1>
+  <p class="sub">just a little collection of tools to solve absurd or repetitive tasks at work<br>❤︎</p>
 
-  <div class="card hidden" id="runCard">
-    <h2>4. Generate</h2>
-    <div class="actions">
-      <button id="runBtn">Generate downloads</button>
-      <button class="secondary hidden" id="downloadBtn">Voilá! Download zip</button>
-    </div>
-    <div class="progress-outer" id="progressOuter">
-      <div class="progress-label" id="progressLabel"></div>
-      <div class="progress-inner" id="progressInner"></div>
-    </div>
-    <div class="log" id="log"></div>
-    <div class="summary hidden" id="finalSummary"></div>
+  <div class="tool-grid">
+    <a class="tool-card" href="00Renamer.html">
+      <h2>File Grabber &amp; Renamer</h2>
+      <p>for when the images come hashed instead of properly named</p>
+    </a>
+    <a class="tool-card" href="01converter.html">
+      <h2>WEBP ► JPG Converter</h2>
+      <p>for when the file is in WEBP/GIF/PNG format and needs to be downloaded in JPG</p>
+    </a>
+    <a class="tool-card" href="02counter.html">
+      <h2>Word Counter</h2>
+      <p>just because</p>
+    </a>
   </div>
 </div>
-
-<script>
-let rows = [];
-let headers = [];
-let zipBlob = null;
-
-const dropzone = document.getElementById('dropzone');
-const fileInput = document.getElementById('fileInput');
-const filePreview = document.getElementById('filePreview');
-const columnCard = document.getElementById('columnCard');
-const proxyCard = document.getElementById('proxyCard');
-const proxyUrlInput = document.getElementById('proxyUrl');
-const runCard = document.getElementById('runCard');
-const nameCol = document.getElementById('nameCol');
-const urlCol = document.getElementById('urlCol');
-const rowCount = document.getElementById('rowCount');
-const runBtn = document.getElementById('runBtn');
-const downloadBtn = document.getElementById('downloadBtn');
-const progressOuter = document.getElementById('progressOuter');
-const progressInner = document.getElementById('progressInner');
-const progressLabel = document.getElementById('progressLabel');
-const log = document.getElementById('log');
-const finalSummary = document.getElementById('finalSummary');
-
-dropzone.addEventListener('click', () => fileInput.click());
-dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
-dropzone.addEventListener('drop', e => {
-  e.preventDefault();
-  dropzone.classList.remove('drag');
-  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-});
-fileInput.addEventListener('change', e => {
-  if (e.target.files.length) handleFile(e.target.files[0]);
-});
-
-function handleFile(file) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const data = new Uint8Array(e.target.result);
-    const wb = XLSX.read(data, { type: 'array' });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-    if (!json.length) {
-      filePreview.textContent = 'That file has no rows we could read.';
-      return;
-    }
-    rows = json;
-    headers = Object.keys(json[0]);
-    filePreview.innerHTML = `Loaded <b>${file.name}</b> — ${rows.length} row(s), ${headers.length} column(s).`;
-
-    nameCol.innerHTML = headers.map(h => `<option value="${escapeAttr(h)}">${escapeHtml(h)}</option>`).join('');
-    urlCol.innerHTML = headers.map(h => `<option value="${escapeAttr(h)}">${escapeHtml(h)}</option>`).join('');
-
-    const guessName = headers.find(h => /file\s*name|name/i.test(h));
-    const guessUrl = headers.find(h => /link|url|download/i.test(h));
-    if (guessName) nameCol.value = guessName;
-    if (guessUrl) urlCol.value = guessUrl;
-
-    rowCount.innerHTML = `<b>${rows.length}</b> file(s) will be processed.`;
-    columnCard.classList.remove('hidden');
-    proxyCard.classList.remove('hidden');
-    runCard.classList.remove('hidden');
-    resetRunState();
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function escapeHtml(s){return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function escapeAttr(s){return escapeHtml(s);}
-
-function resetRunState(){
-  zipBlob = null;
-  downloadBtn.classList.add('hidden');
-  progressOuter.classList.remove('show');
-  progressInner.style.width = '0%';
-  log.innerHTML = '';
-  log.classList.remove('show');
-  finalSummary.classList.add('hidden');
-  runBtn.disabled = false;
-  runBtn.textContent = 'Generate downloads';
-}
-
-function addLog(msg, type='info'){
-  const line = document.createElement('div');
-  line.className = 'log-line ' + type;
-  line.textContent = msg;
-  log.appendChild(line);
-  log.scrollTop = log.scrollHeight;
-}
-
-function guessExtension(url, fallbackName){
-  try {
-    const u = new URL(url, window.location.href);
-    const path = u.pathname;
-    const match = path.match(/\.([a-zA-Z0-9]{1,6})$/);
-    if (match) return match[1];
-  } catch(e) {}
-  const nameMatch = String(fallbackName).match(/\.([a-zA-Z0-9]{1,6})$/);
-  if (nameMatch) return null;
-  return null;
-}
-
-function ensureExtension(desiredName, url){
-  const hasExt = /\.[a-zA-Z0-9]{1,6}$/.test(desiredName);
-  if (hasExt) return desiredName;
-  const ext = guessExtension(url, desiredName);
-  return ext ? `${desiredName}.${ext}` : desiredName;
-}
-
-async function runJob(){
-  runBtn.disabled = true;
-  runBtn.textContent = 'Working…';
-  log.classList.add('show');
-  log.innerHTML = '';
-  progressOuter.classList.add('show');
-  finalSummary.classList.add('hidden');
-  downloadBtn.classList.add('hidden');
-  zipBlob = null;
-
-  const nCol = nameCol.value;
-  const uCol = urlCol.value;
-  const zip = new JSZip();
-  const usedNames = new Set();
-  let ok = 0, fail = 0;
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const rawName = String(row[nCol] ?? '').trim();
-    const url = String(row[uCol] ?? '').trim();
-    progressLabel.textContent = `Fetching ${i+1} of ${rows.length}: ${rawName || '(no name)'}`;
-    progressInner.style.width = `${Math.round(((i) / rows.length) * 100)}%`;
-
-    if (!url) {
-      addLog(`✗ Row ${i+1}: no URL, skipped.`, 'err');
-      fail++;
-      continue;
-    }
-    if (!rawName) {
-      addLog(`✗ Row ${i+1}: no filename, skipped.`, 'err');
-      fail++;
-      continue;
-    }
-
-    try {
-      const proxy = proxyUrlInput.value.trim();
-      const fetchUrl = proxy ? `${proxy.replace(/\/$/, '')}/?url=${encodeURIComponent(url)}` : url;
-      const res = await fetch(fetchUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-
-      let finalName = ensureExtension(rawName, url);
-      let dedupedName = finalName;
-      let counter = 2;
-      while (usedNames.has(dedupedName)) {
-        const dot = finalName.lastIndexOf('.');
-        dedupedName = dot > -1
-          ? `${finalName.slice(0, dot)} (${counter})${finalName.slice(dot)}`
-          : `${finalName} (${counter})`;
-        counter++;
-      }
-      usedNames.add(dedupedName);
-
-      zip.file(dedupedName, blob);
-      addLog(`✓ ${dedupedName}`, 'ok');
-      ok++;
-    } catch (err) {
-      const isCors = err instanceof TypeError;
-      addLog(`✗ Row ${i+1} (${rawName}): ${isCors ? 'blocked (likely CORS or network issue)' : err.message}`, 'err');
-      fail++;
-    }
-  }
-
-  progressInner.style.width = '100%';
-  progressLabel.textContent = 'Building zip…';
-
-  if (ok > 0) {
-    zipBlob = await zip.generateAsync({ type: 'blob' });
-    downloadBtn.classList.remove('hidden');
-  }
-
-  progressLabel.textContent = 'Done';
-  finalSummary.classList.remove('hidden');
-  finalSummary.innerHTML = `<b>${ok}</b> succeeded, <b>${fail}</b> failed out of ${rows.length}.` +
-    (fail > 0 ? ' See the log above for details on failures.' : '');
-
-  runBtn.disabled = false;
-  runBtn.textContent = 'Run again';
-}
-
-runBtn.addEventListener('click', runJob);
-
-downloadBtn.addEventListener('click', () => {
-  if (!zipBlob) return;
-  const a = document.createElement('a');
-  const url = URL.createObjectURL(zipBlob);
-  a.href = url;
-  a.download = 'renamed-files.zip';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-});
-</script>
 </body>
 </html>

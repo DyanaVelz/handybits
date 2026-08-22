@@ -13,10 +13,12 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="nav"><a href="index.html">File Renamer</a><a href="WEBPconverter.html">WEBP ► JPG</a></div>
+  <div class="nav">
+    <a href="index.html">Home</a><a href="00Renamer.html">File Renamer</a><a href="01converter.html">WEBP ► JPG</a><a href="02counter.html">Word Counter</a>
+  </div>
   <div class="sun alt"></div>
   <h1>❤︎ WEBP ► JPG Converter ❤︎</h1>
-  <p class="sub">if you upload a spreadsheet with a part number column and an WEBP link column, this coolness fetches each file, converts it to JPG, and packages everything into one zip to download<br>(images plus a CSV mapping part numbers to filenames) <br>❤︎</p>
+  <p class="sub">if you upload a spreadsheet with a part number column and an WEBP/PNG/GIF link column, this coolness fetches each file, converts it to JPG, and packages everything into one zip to download<br>(images plus a CSV mapping part numbers to filenames) <br>❤︎</p>
 
   <div class="card">
     <h2>1. Upload spreadsheet</h2>
@@ -154,8 +156,7 @@ function addLog(msg, type='info'){
   log.scrollTop = log.scrollHeight;
 }
 
-// Convert any image blob to a JPG blob via canvas.
-// Works for WEBP (and PNG/GIF too) since the browser's <img> decoder handles all of them.
+// Works for WEBP (and PNG/GIF too) since the browser's <img> decoder handles all of them, yay.
 function convertToJpg(blob){
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(blob);
@@ -165,8 +166,6 @@ function convertToJpg(blob){
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
       const ctx = canvas.getContext('2d');
-      // JPG has no transparency, so paint a white background first
-      // in case the source WEBP had an alpha channel.
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0);
@@ -248,7 +247,7 @@ async function runJob(){
       ok++;
     } catch (err) {
       const isCors = err instanceof TypeError;
-      addLog(`✗ Row ${i+1} (${partNumber}): ${isCors ? 'blocked (likely CORS or network issue)' : err.message}`, 'err');
+      addLog(`✗ Row ${i+1} (${partNumber}): ${isCors ? 'blocked (likely CORS or network issue, sorry!)' : err.message}`, 'err');
       fail++;
     }
   }
