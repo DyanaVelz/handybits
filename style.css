@@ -147,16 +147,20 @@ button.small{padding:8px 12px;font-size:10px;}
 .file-preview{font-size:13px;color:var(--muted);margin-top:8px;}
 .file-preview b{color:var(--accent-2);}
 
+.progress-wrap{
+  display:none;
+  margin:14px 0 8px;
+}
+.progress-wrap.show{display:block;}
+
 .progress-outer{
   background:#0d0221;
   border:1px solid var(--border);
   border-radius:6px;
   height:10px;
   overflow:hidden;
-  margin:14px 0 8px;
-  display:none;
+  margin-top:4px;
 }
-.progress-outer.show{display:block;}
 .progress-inner{
   height:100%;
   background:linear-gradient(90deg,var(--accent),var(--accent-2));
@@ -164,7 +168,11 @@ button.small{padding:8px 12px;font-size:10px;}
   width:0%;
   transition:width .2s;
 }
-.progress-label{font-size:13px;color:var(--muted);margin-bottom:2px;}
+.progress-label{
+  font-size:13px;
+  color:var(--muted);
+  margin-bottom:2px;
+}
 
 .log{
   max-height:220px;
@@ -260,7 +268,7 @@ button.small{padding:8px 12px;font-size:10px;}
 }
 .tool-card p{color:var(--muted);font-size:13px;line-height:1.5;margin:0;}
 
-/* ---- Text tools page ---- */
+/* ---- Counter page ---- */
 textarea{
   width:100%;
   min-height:160px;
