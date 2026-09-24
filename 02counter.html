@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Word Counter</title>
+<title>Under Construction</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
@@ -12,105 +12,261 @@
 <body>
 <div class="wrap">
   <div class="nav">
-    <a href="index.html">Home</a><a href="00renamer.html">File Renamer</a><a href="01converter.html">WEBP ► JPG</a><a href="02counter.html">Word Counter</a>
-  </div>
-  <div class="sun altt"></div>
-  <h1>❤︎ Word Counter ❤︎</h1>
-  <p class="sub">paste or type below (counts update as you go, and the buttons rewrite the text in place)<br>❤︎</p>
-
-  <div class="card">
-    <h2>1. Your text</h2>
-    <textarea id="textInput" placeholder="Type or paste text here…"></textarea>
-
-    <div class="stats">
-      <div class="stat">
-        <span class="num" id="wordCount">0</span>
-        <span class="label">Words</span>
-      </div>
-      <div class="stat">
-        <span class="num" id="charNoSpaces">0</span>
-        <span class="label">Characters</span>
-      </div>
-      <div class="stat">
-        <span class="num" id="charWithSpaces">0</span>
-        <span class="label">Chars + spaces</span>
-      </div>
-    </div>
+    <a href="index.html">Home</a><a href="00renamer.html">File Renamer</a><a href="01converter.html">WEBP ► JPG</a><a href="02counter.html">Word Counter</a><a href="03matcher.html">Column Matcher</a>
   </div>
 
+  <div class="sun"></div>
+  <h1>❤︎ Working On It ❤︎</h1>
+  <p class="sub">this tool isn't ready yet, jump the letter piles while you wait <br>❤︎</p>
+
   <div class="card">
-    <h2>2. Change the case</h2>
-    <div class="btn-row">
-      <button class="small" id="btnUpper">UPPERCASE</button>
-      <button class="small" id="btnLower">lowercase</button>
-      <button class="small" id="btnCapitalize">Capitalize Each Word</button>
-      <button class="small" id="btnSentence">Sentence case</button>
+    <div class="game-wrap">
+      <canvas id="game" width="680" height="220"></canvas>
+      <div class="game-overlay" id="startOverlay">
+        <p>press SPACE / ↑ / tap to jump</p>
+      </div>
+      <div class="game-overlay hidden" id="overOverlay">
+        <p id="finalScore">score: 0</p>
+        <p id="bestScore" class="best">best: 0</p>
+        <button class="secondary small" id="retryBtn">jump again</button>
+      </div>
     </div>
-    <div class="actions" style="margin-top:16px;">
-      <button class="secondary" id="btnCopy">Copy text</button>
-      <button class="secondary" id="btnClear">Clear</button>
+    <div class="score-row">
+      <span>score: <b id="liveScore">0</b></span>
+      <span>best: <b id="liveBest">0</b></span>
     </div>
-    <div class="summary hidden" id="copyMsg">Copied ❤</div>
   </div>
 </div>
 
 <script>
-const textInput = document.getElementById('textInput');
-const wordCount = document.getElementById('wordCount');
-const charNoSpaces = document.getElementById('charNoSpaces');
-const charWithSpaces = document.getElementById('charWithSpaces');
-const copyMsg = document.getElementById('copyMsg');
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const groundY = H - 30;
 
-function updateStats(){
-  const text = textInput.value;
-  const words = text.trim().length ? text.trim().split(/\s+/).length : 0;
-  wordCount.textContent = words;
-  charWithSpaces.textContent = text.length;
-  charNoSpaces.textContent = text.replace(/\s/g, '').length;
+const startOverlay = document.getElementById('startOverlay');
+const overOverlay = document.getElementById('overOverlay');
+const finalScoreEl = document.getElementById('finalScore');
+const bestScoreEl = document.getElementById('bestScore');
+const liveScoreEl = document.getElementById('liveScore');
+const liveBestEl = document.getElementById('liveBest');
+const retryBtn = document.getElementById('retryBtn');
+
+const COLORS = {
+  bg: '#0d0221',
+  ground: '#5b2a8c',
+  sunTop: '#f7fdfe',
+  sunMid: '#ff9ecf',
+  sunBottom: '#ff2fdb',
+  letter: '#01cdfe',
+  letterGlow: 'rgba(1,205,254,0.5)',
+  text: '#f3ecff',
+  muted: '#b79ce8'
+};
+
+const LETTER_POOL = 'HANDYBITS'.split('');
+
+let player, obstacles, speed, score, frame, running, started, best;
+
+function loadBest(){
+  const v = parseInt(localStorage.getItem('handybits-jump-best') || '0', 10);
+  return isNaN(v) ? 0 : v;
+}
+function saveBest(v){
+  localStorage.setItem('handybits-jump-best', String(v));
 }
 
-textInput.addEventListener('input', updateStats);
-updateStats();
+function resetGame(){
+  player = { x: 70, y: groundY - 26, r: 15, vy: 0, grounded: true };
+  obstacles = [];
+  speed = 5.2;
+  score = 0;
+  frame = 0;
+  running = true;
+  spawnObstacle(true);
+}
 
-document.getElementById('btnUpper').addEventListener('click', () => {
-  textInput.value = textInput.value.toUpperCase();
-  updateStats();
-});
+function spawnObstacle(first){
+  const count = 1 + Math.floor(Math.random() * 3);
+  const letters = [];
+  for (let i = 0; i < count; i++) {
+    letters.push(LETTER_POOL[Math.floor(Math.random() * LETTER_POOL.length)]);
+  }
+  const blockSize = 22;
+  const startX = first ? W + 120 : W + 60 + Math.random() * 140;
+  obstacles.push({
+    x: startX,
+    letters,
+    w: blockSize,
+    h: count * blockSize
+  });
+}
 
-document.getElementById('btnLower').addEventListener('click', () => {
-  textInput.value = textInput.value.toLowerCase();
-  updateStats();
-});
+function jump(){
+  if (!started) {
+    started = true;
+    startOverlay.classList.add('hidden');
+    resetGame();
+    requestAnimationFrame(loop);
+    return;
+  }
+  if (!running) {
+    doRetry();
+    return;
+  }
+  if (player.grounded) {
+    player.vy = -13.5;
+    player.grounded = false;
+  }
+}
 
-document.getElementById('btnCapitalize').addEventListener('click', () => {
-  textInput.value = textInput.value
-    .toLowerCase()
-    .replace(/\b\w/g, c => c.toUpperCase());
-  updateStats();
-});
+function doRetry(){
+  overOverlay.classList.add('hidden');
+  resetGame();
+  requestAnimationFrame(loop);
+}
 
-document.getElementById('btnSentence').addEventListener('click', () => {
-  const lowered = textInput.value.toLowerCase();
-  textInput.value = lowered.replace(/(^\s*\w|[.!?]\s+\w)/g, c => c.toUpperCase());
-  updateStats();
-});
+function update(){
+  frame++;
+  score += 0.12;
+  if (frame % 400 === 0) speed += 0.5;
 
-document.getElementById('btnClear').addEventListener('click', () => {
-  textInput.value = '';
-  updateStats();
-  textInput.focus();
-});
+  // player physics
+  player.vy += 0.85;
+  player.y += player.vy;
+  if (player.y >= groundY - player.r * 2 + 4) {
+    player.y = groundY - player.r * 2 + 4;
+    player.vy = 0;
+    player.grounded = true;
+  }
 
-document.getElementById('btnCopy').addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(textInput.value);
-    copyMsg.classList.remove('hidden');
-    setTimeout(() => copyMsg.classList.add('hidden'), 1500);
-  } catch (err) {
-    textInput.select();
-    document.execCommand('copy');
+  // obstacles
+  for (const o of obstacles) o.x -= speed;
+  if (obstacles.length && obstacles[0].x + obstacles[0].w < -20) obstacles.shift();
+  if (!obstacles.length || obstacles[obstacles.length - 1].x < W - 220 - Math.random() * 160) {
+    spawnObstacle(false);
+  }
+
+  // collision (circle vs rect, slightly forgiving)
+  const px = player.x, py = player.y + player.r, pr = player.r * 0.82;
+  for (const o of obstacles) {
+    const rectX = o.x, rectY = groundY - o.h, rectW = o.w, rectH = o.h;
+    const closestX = Math.max(rectX, Math.min(px, rectX + rectW));
+    const closestY = Math.max(rectY, Math.min(py, rectY + rectH));
+    const dx = px - closestX, dy = py - closestY;
+    if (dx * dx + dy * dy < pr * pr) {
+      gameOver();
+      return;
+    }
+  }
+}
+
+function draw(){
+  ctx.clearRect(0, 0, W, H);
+
+  // ground
+  ctx.strokeStyle = COLORS.ground;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(W, groundY);
+  ctx.stroke();
+
+  // faint scrolling ground ticks
+  ctx.fillStyle = COLORS.ground;
+  const tickOffset = (frame * speed) % 40;
+  for (let x = -tickOffset; x < W; x += 40) {
+    ctx.fillRect(x, groundY + 6, 16, 2);
+  }
+
+  // player (sun)
+  const grad = ctx.createLinearGradient(0, player.y, 0, player.y + player.r * 2);
+  grad.addColorStop(0, COLORS.sunTop);
+  grad.addColorStop(0.45, COLORS.sunMid);
+  grad.addColorStop(1, COLORS.sunBottom);
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,47,219,0.65)';
+  ctx.shadowBlur = 18;
+  ctx.beginPath();
+  ctx.arc(player.x + player.r, player.y + player.r, player.r, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.restore();
+  // sun stripe lines
+  ctx.strokeStyle = COLORS.bg;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(player.x + 3, player.y + player.r * 1.35);
+  ctx.lineTo(player.x + player.r * 2 - 3, player.y + player.r * 1.35);
+  ctx.moveTo(player.x + 5, player.y + player.r * 1.65);
+  ctx.lineTo(player.x + player.r * 2 - 5, player.y + player.r * 1.65);
+  ctx.stroke();
+
+  // obstacles (letter piles)
+  ctx.font = '12px "Press Start 2P", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const o of obstacles) {
+    const blockSize = o.w;
+    for (let i = 0; i < o.letters.length; i++) {
+      const by = groundY - (i + 1) * blockSize;
+      ctx.save();
+      ctx.shadowColor = COLORS.letterGlow;
+      ctx.shadowBlur = 8;
+      ctx.strokeStyle = COLORS.letter;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(o.x, by, blockSize, blockSize);
+      ctx.fillStyle = COLORS.letter;
+      ctx.fillText(o.letters[i], o.x + blockSize / 2, by + blockSize / 2 + 1);
+      ctx.restore();
+    }
+  }
+
+  liveScoreEl.textContent = Math.floor(score);
+  liveBestEl.textContent = best;
+}
+
+function gameOver(){
+  running = false;
+  const finalScore = Math.floor(score);
+  if (finalScore > best) {
+    best = finalScore;
+    saveBest(best);
+  }
+  finalScoreEl.textContent = `score: ${finalScore}`;
+  bestScoreEl.textContent = `best: ${best}`;
+  overOverlay.classList.remove('hidden');
+}
+
+function loop(){
+  if (!running) return;
+  update();
+  if (running) {
+    draw();
+    requestAnimationFrame(loop);
+  } else {
+    draw();
+  }
+}
+
+best = loadBest();
+liveBestEl.textContent = best;
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') {
+    e.preventDefault();
+    jump();
   }
 });
+canvas.addEventListener('mousedown', jump);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); jump(); }, { passive: false });
+retryBtn.addEventListener('click', doRetry);
+
+// static preview frame before first start
+player = { x: 70, y: groundY - 26, r: 15, vy: 0, grounded: true };
+obstacles = [];
+score = 0; frame = 0; running = false; started = false;
+draw();
 </script>
 </body>
 </html>

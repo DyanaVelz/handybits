@@ -14,7 +14,7 @@
 <body>
 <div class="wrap">
   <div class="nav">
-    <a href="index.html">Home</a><a href="00renamer.html">File Renamer</a><a href="01converter.html">WEBP ► JPG</a><a href="02counter.html">Word Counter</a>
+    <a href="index.html">Home</a><a href="00renamer.html">File Renamer</a><a href="01converter.html">WEBP ► JPG</a><a href="02counter.html">Word Counter</a><a href="03matcher.html">Column Matcher</a>
   </div>
   <div class="sun"></div>
   <h1>❤︎ File Grabber &amp; Renamer ❤︎</h1>
@@ -57,10 +57,9 @@
       <button id="runBtn">Generate downloads</button>
       <button class="secondary hidden" id="downloadBtn">Voilá! Download zip</button>
     </div>
-    <div class="progress-wrap" id="progressWrap">
+    <div class="progress-outer" id="progressOuter">
       <div class="progress-label" id="progressLabel"></div>
-      <div class="progress-outer" id="progressOuter">
-        <div class="progress-inner" id="progressInner"></div>
+      <div class="progress-inner" id="progressInner"></div>
     </div>
     <div class="log" id="log"></div>
     <div class="summary hidden" id="finalSummary"></div>
@@ -87,7 +86,6 @@ const downloadBtn = document.getElementById('downloadBtn');
 const progressOuter = document.getElementById('progressOuter');
 const progressInner = document.getElementById('progressInner');
 const progressLabel = document.getElementById('progressLabel');
-const progressWrap = document.getElementById('progressWrap');
 const log = document.getElementById('log');
 const finalSummary = document.getElementById('finalSummary');
 
@@ -141,7 +139,7 @@ function escapeAttr(s){return escapeHtml(s);}
 function resetRunState(){
   zipBlob = null;
   downloadBtn.classList.add('hidden');
-  progressWrap.classList.remove('show');
+  progressOuter.classList.remove('show');
   progressInner.style.width = '0%';
   log.innerHTML = '';
   log.classList.remove('show');
@@ -182,7 +180,7 @@ async function runJob(){
   runBtn.textContent = 'Working…';
   log.classList.add('show');
   log.innerHTML = '';
-  progressWrap.classList.add('show');
+  progressOuter.classList.add('show');
   finalSummary.classList.add('hidden');
   downloadBtn.classList.add('hidden');
   zipBlob = null;

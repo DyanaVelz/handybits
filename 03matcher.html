@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Column Matcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a href="index.html">Home</a><a href="00renamer.html">File Renamer</a><a href="01converter.html">WEBP ► JPG</a><a href="02counter.html">Word Counter</a><a href="03matcher.html">Column Matcher</a>
+  </div>
+  <div class="sun alt"></div>
+  <h1>❤︎ Column Matcher ❤︎</h1>
+  <p class="sub">upload one workbook, pick a sheet + column for List A and List B, and see which values in List B also show up in List A — highlighted, and preserved in a new column <br>❤︎</p>
+
+  <div class="card">
+    <h2>1. Upload workbook</h2>
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+      <div id="dropzoneText">Click to choose a file, or drag one here<br><span style="font-size:12px">.xlsx or .xls (needs at least 2 sheets)</span></div>
+    </div>
+    <div class="file-preview" id="filePreview"></div>
+  </div>
+
+  <div class="card hidden" id="setupCard">
+    <h2>2. Choose your lists</h2>
+    <div class="row">
+      <div>
+        <label for="sheetA">List A — sheet</label>
+        <select id="sheetA"></select>
+      </div>
+      <div>
+        <label for="colA">List A — column letter</label>
+        <select id="colA"></select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px;">
+      <div>
+        <label for="sheetB">List B — sheet</label>
+        <select id="sheetB"></select>
+      </div>
+      <div>
+        <label for="colB">List B — column letter</label>
+        <select id="colB"></select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:16px;">
+      <div>
+        <label class="check-label"><input type="checkbox" id="headerRow" checked> First row is a header</label>
+      </div>
+      <div>
+        <label class="check-label"><input type="checkbox" id="ignoreCase" checked> Ignore case &amp; extra spaces</label>
+      </div>
+    </div>
+    <div class="actions" style="margin-top:16px;">
+      <button id="compareBtn">Compare lists</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="resultsCard">
+    <h2>3. Results</h2>
+    <div class="summary" id="resultSummary"></div>
+    <div class="table-wrap">
+      <table class="data-table" id="resultsTable"></table>
+    </div>
+    <div class="actions" style="margin-top:16px;">
+      <button id="downloadXlsx">Download coloured .xlsx</button>
+      <button class="secondary" id="downloadCsv">Download plain .csv</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let workbook = null;
+let sheetRows = {}; // cache: sheetName -> array-of-arrays
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const filePreview = document.getElementById('filePreview');
+const setupCard = document.getElementById('setupCard');
+const sheetA = document.getElementById('sheetA');
+const sheetB = document.getElementById('sheetB');
+const colA = document.getElementById('colA');
+const colB = document.getElementById('colB');
+const headerRow = document.getElementById('headerRow');
+const ignoreCase = document.getElementById('ignoreCase');
+const compareBtn = document.getElementById('compareBtn');
+const resultsCard = document.getElementById('resultsCard');
+const resultSummary = document.getElementById('resultSummary');
+const resultsTable = document.getElementById('resultsTable');
+const downloadXlsx = document.getElementById('downloadXlsx');
+const downloadCsv = document.getElementById('downloadCsv');
+
+let lastResults = null; // { headerLabels, rows: [{cells, matched}], matchColLabel }
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function colLetter(index){
+  // 0 -> A, 25 -> Z, 26 -> AA, ...
+  let s = '';
+  let n = index;
+  do {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return s;
+}
+
+function getSheetRows(name){
+  if (sheetRows[name]) return sheetRows[name];
+  const ws = workbook.Sheets[name];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+  sheetRows[name] = rows;
+  return rows;
+}
+
+function maxCols(rows){
+  let max = 0;
+  for (const r of rows) if (r.length > max) max = r.length;
+  return max;
+}
+
+function populateColumnSelect(select, rows){
+  const n = Math.max(maxCols(rows), 1);
+  select.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = colLetter(i);
+    select.appendChild(opt);
+  }
+  select.value = 0; // default to column A
+}
+
+function refreshColumnsFor(sheetSelect, colSelect){
+  const name = sheetSelect.value;
+  if (!name) return;
+  const rows = getSheetRows(name);
+  populateColumnSelect(colSelect, rows);
+}
+
+function handleFile(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const data = new Uint8Array(e.target.result);
+    workbook = XLSX.read(data, { type: 'array' });
+    sheetRows = {};
+    const names = workbook.SheetNames;
+    if (!names.length) {
+      filePreview.textContent = 'Could not find any sheets in that file.';
+      return;
+    }
+    filePreview.innerHTML = `Loaded <b>${escapeHtml(file.name)}</b> — ${names.length} sheet(s): ${names.map(escapeHtml).join(', ')}`;
+
+    sheetA.innerHTML = names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+    sheetB.innerHTML = names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+    sheetA.value = names[0];
+    sheetB.value = names.length > 1 ? names[1] : names[0];
+
+    refreshColumnsFor(sheetA, colA);
+    refreshColumnsFor(sheetB, colB);
+
+    setupCard.classList.remove('hidden');
+    resultsCard.classList.add('hidden');
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+sheetA.addEventListener('change', () => refreshColumnsFor(sheetA, colA));
+sheetB.addEventListener('change', () => refreshColumnsFor(sheetB, colB));
+
+function escapeHtml(s){return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function escapeAttr(s){return escapeHtml(s);}
+
+function normalize(v){
+  let s = String(v ?? '').trim();
+  if (ignoreCase.checked) s = s.toLowerCase().replace(/\s+/g, ' ');
+  return s;
+}
+
+compareBtn.addEventListener('click', () => {
+  const rowsA = getSheetRows(sheetA.value);
+  const rowsB = getSheetRows(sheetB.value);
+  const idxA = parseInt(colA.value, 10);
+  const idxB = parseInt(colB.value, 10);
+  const skipHeader = headerRow.checked;
+
+  const setA = new Set();
+  const startA = skipHeader ? 1 : 0;
+  for (let i = startA; i < rowsA.length; i++) {
+    const val = normalize(rowsA[i][idxA]);
+    if (val) setA.add(val);
+  }
+
+  const startB = skipHeader ? 1 : 0;
+  const bodyRows = [];
+  let matchedCount = 0;
+
+  const bColCount = Math.max(maxCols(rowsB), idxB + 1);
+  let matchColLabel = `Found in ${sheetA.options[sheetA.selectedIndex].text} (${colLetter(idxA)})`;
+
+  for (let i = startB; i < rowsB.length; i++) {
+    const rawRow = rowsB[i];
+    const cells = [];
+    for (let c = 0; c < bColCount; c++) cells.push(rawRow[c] ?? '');
+    const val = normalize(rawRow[idxB]);
+    const matched = val.length > 0 && setA.has(val);
+    if (matched) matchedCount++;
+    bodyRows.push({ cells, matched });
+  }
+
+  let headerLabels;
+  if (skipHeader && rowsB.length > 0) {
+    headerLabels = [];
+    for (let c = 0; c < bColCount; c++) headerLabels.push(rowsB[0][c] || colLetter(c));
+  } else {
+    headerLabels = [];
+    for (let c = 0; c < bColCount; c++) headerLabels.push(colLetter(c));
+  }
+  headerLabels.push(matchColLabel);
+
+  lastResults = { headerLabels, rows: bodyRows, matchColLabel, colBIndex: idxB };
+
+  resultSummary.innerHTML = `<b>${matchedCount}</b> of <b>${bodyRows.length}</b> row(s) in List B were found in List A.`;
+  renderTable(lastResults);
+  resultsCard.classList.remove('hidden');
+});
+
+function renderTable(results){
+  const { headerLabels, rows } = results;
+  let html = '<thead><tr>';
+  for (const h of headerLabels) html += `<th>${escapeHtml(h)}</th>`;
+  html += '</tr></thead><tbody>';
+  const previewRows = rows.slice(0, 300);
+  for (const r of previewRows) {
+    html += `<tr class="${r.matched ? 'row-match' : 'row-nomatch'}">`;
+    for (const c of r.cells) html += `<td>${escapeHtml(c)}</td>`;
+    html += `<td>${r.matched ? 'Yes' : 'No'}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody>';
+  resultsTable.innerHTML = html;
+  if (rows.length > previewRows.length) {
+    resultSummary.innerHTML += ` <span style="opacity:.7">(showing first ${previewRows.length} rows below — the download includes all of them)</span>`;
+  }
+}
+
+downloadCsv.addEventListener('click', () => {
+  if (!lastResults) return;
+  const { headerLabels, rows } = lastResults;
+  const csvEscape = v => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [headerLabels.map(csvEscape).join(',')];
+  for (const r of rows) {
+    lines.push([...r.cells, r.matched ? 'Yes' : 'No'].map(csvEscape).join(','));
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  triggerDownload(blob, 'column-matcher-results.csv');
+});
+
+downloadXlsx.addEventListener('click', async () => {
+  if (!lastResults) return;
+  const { headerLabels, rows } = lastResults;
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Results');
+
+  ws.addRow(headerLabels);
+  ws.getRow(1).font = { bold: true };
+  ws.getRow(1).fill = {
+    type: 'pattern', pattern: 'solid',
+    fgColor: { argb: 'FF24124A' }
+  };
+  ws.getRow(1).font = { bold: true, color: { argb: 'FF01CDFE' } };
+
+  const matchFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6F6D5' } };
+  const noMatchFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE1EC' } };
+
+  for (const r of rows) {
+    const excelRow = ws.addRow([...r.cells, r.matched ? 'Yes' : 'No']);
+    excelRow.eachCell(cell => { cell.fill = r.matched ? matchFill : noMatchFill; });
+  }
+
+  ws.columns.forEach(col => { col.width = 20; });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/octet-stream' });
+  triggerDownload(blob, 'column-matcher-results.xlsx');
+});
+
+function triggerDownload(blob, filename){
+  const a = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+</script>
+</body>
+</html>
